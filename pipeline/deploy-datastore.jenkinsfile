@@ -42,6 +42,11 @@ pipeline {
                 sh 'ls -la'
             }
         }
+        stage ("Configure Pipeline") {
+            steps {
+                load "${CONFIGURATION}"
+            }
+        }
         stage("Generate Dockerfile") {
             steps {
                 writeFile(
