@@ -62,7 +62,7 @@ pipeline {
                 script {
                     // define ssh client
                     def remote = [:]
-                    remote.name = "${DB_ID}-${DEPLOY}"
+                    remote.name = "db-${API_ID}-${DEPLOY}"
                     remote.host = "${SWARM_HOSTNAME}"
                     remote.user = 'jenkins'
                     remote.password = "${SWARM_SSH_CRED}"
