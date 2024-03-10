@@ -8,18 +8,20 @@
 // 1. Create 'swarm-tgtoken-[dev/prod]' secret text with TG token
 
 pipeline {
+
+    parameters {
+            choice(name: 'DEPLOY', choices: ['dev', 'prod'], description: 'Select deployment environment')
+            choice(name: 'DATASTORE', choices: ['none', 'create', 'initialize'], description: 'Make action to database storage')
+    }
+
     agent any
+    
     environment {
         // General Configuration 
         VERBOSE = "1"
         // DEPLOY = "dev"
 
         APP_DB_PASS = "bfsdejkdfvbbshrje367825hukhjk"
-
-        parameters {
-            choice(name: 'DEPLOY', choices: ['dev', 'prod'], description: 'Select deployment environment')
-            choice(name: 'DATASTORE', choices: ['none', 'create', 'initialize'], description: 'Make action to database storage')
-        }
 
         // Application-specific deploy configuration
         TG_TOKEN = credentials("swarm-tgtoken-${DEPLOY}")           // TG bot token from Jenkins secrets store
