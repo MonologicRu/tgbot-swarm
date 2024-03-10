@@ -27,7 +27,7 @@ pipeline {
         APP_HOME = "sample-bot"                                     // Deployment folder work directory
 
         // Swarm host-specific deploy configuration
-        API_ID = "tgswarm"
+        API_ID = "tgswarm"                                          // Swarm controller name prefix for container ops
         API_PORT = "8443"
         API_PATH = "controller"
         API_HOST = "0.0.0.0"
