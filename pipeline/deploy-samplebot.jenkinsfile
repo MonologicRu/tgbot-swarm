@@ -168,8 +168,8 @@ pipeline {
                         sshCommand remote: remote, command: "docker exec ${CONTAINER_NAME} ls -la"
                     }
                     stage ("Create or update Datastore") {
-                        if (env.DATASTORE = 'create') {
-                            
+                        if (env.DATASTORE == 'create') {
+
                             env.DB_CREATE_TRANSACTION = "CREATE DATABASE IF NOT EXISTS ${APP_NAME}-store CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci;"
                             env.DB_USER_TRANSACTION = "CREATE USER IF NOT EXISTS '${APP_NAME}'@'localhost' IDENTIFIED WITH mysql_native_password BY '${APP_DB_PASS}';"
                             env.DB_GRANT_TRANSACTION = "GRANT ALL PRIVILEGES ON ${APP_NAME}-store.* TO '${APP_NAME}'@'localhost' WITH GRANT OPTION;"
