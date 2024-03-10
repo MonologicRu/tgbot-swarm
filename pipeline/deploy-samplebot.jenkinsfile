@@ -12,7 +12,14 @@ pipeline {
     environment {
         // General Configuration 
         VERBOSE = "1"
-        DEPLOY = "dev"
+        // DEPLOY = "dev"
+
+        APP_DB_PASS = "bfsdejkdfvbbshrje367825hukhjk"
+
+        parameters {
+            choice(name: 'DEPLOY', choices: ['dev', 'prod'], description: 'Select deployment environment')
+            choice(name: 'DATASTORE', choices: ['none', 'create', 'initialize'], description: 'Make action to database storage')
+        }
 
         // Application-specific deploy configuration
         TG_TOKEN = credentials("swarm-tgtoken-${DEPLOY}")           // TG bot token from Jenkins secrets store
@@ -21,15 +28,33 @@ pipeline {
         APP_HOME = "sample-bot"
 
         // Swarm host-specific deploy configuration
+        API_ID = "tgswarm"
         API_PORT = "8443"
         API_PATH = "controller"
         API_HOST = "0.0.0.0"
+
+        DB_PASS = credentials("swarm-datastore-${DEPLOY}")          // Swarm API Key from Jenkins secrets store
         API_KEY = credentials("swarm-apikey-${DEPLOY}")
         SWARM_HOSTNAME = credentials("swarm-hostname-${DEPLOY}")    // Swarm node hostname Jenkins secrets store
         SWARM_SSH_CRED = credentials("swarm-sshcred-${DEPLOY}")     // SSH Passwords for Swarm node from Jenkins secrets store
+
     }
     
     stages {
+        stage('Set deploy params') {
+            steps {
+                script {
+                    if (env.DEPLOY != 'dev' && env.DEPLOY != 'prod') {
+                        echo 'Parameter not set, using default'
+                        env.DEPLOY = 'dev'
+                    }
+                    if (env.DATASTORE != 'create' && env.DATASTORE != 'initialize' && env.DATASTORE != 'none') {
+                        echo 'Parameter not set, no action needed'
+                        env.DATASTORE = 'none'
+                    }
+                }
+            }
+        }
         stage('Get Swarm Node params') {
             steps {
                 script {
@@ -141,6 +166,21 @@ pipeline {
                         sshCommand remote: remote, command: "docker run -d -p ${APP_PORT}:${APP_PORT} -e NODE_ENV=${DEPLOY} --restart unless-stopped --name ${CONTAINER_NAME} ${IMAGE_NAME}"
                         sshCommand remote: remote, command: "docker image prune -f && docker image ls && docker ps"
                         sshCommand remote: remote, command: "docker exec ${CONTAINER_NAME} ls -la"
+                    }
+                    stage ("Create or update Datastore") {
+                        if (env.DATASTORE = 'create') {
+                            
+                            env.DB_CREATE_TRANSACTION = "CREATE DATABASE IF NOT EXISTS ${APP_NAME}-store CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci;"
+                            env.DB_USER_TRANSACTION = "CREATE USER IF NOT EXISTS '${APP_NAME}'@'localhost' IDENTIFIED WITH mysql_native_password BY '${APP_DB_PASS}';"
+                            env.DB_GRANT_TRANSACTION = "GRANT ALL PRIVILEGES ON ${APP_NAME}-store.* TO '${APP_NAME}'@'localhost' WITH GRANT OPTION;"
+
+                            sshCommand remote: remote, command: "docker exec ${API_ID}-db mysql -p${DB_PASS} '${DB_CREATE_TRANSACTION}'"
+                            sshCommand remote: remote, command: "docker exec ${API_ID}-db mysql -p${DB_PASS} '${DB_USER_TRANSACTION}'"
+                            sshCommand remote: remote, command: "docker exec ${API_ID}-db mysql -p${DB_PASS} '${DB_GRANT_TRANSACTION}'"
+
+                        } else {
+                            println("No DB action taken.")
+                        }
                     }
                 }
             }
