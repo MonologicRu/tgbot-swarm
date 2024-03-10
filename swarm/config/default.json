@@ -27,7 +27,9 @@
             "ssl_certificate": "",
             "ssl_key": "",
             "container_name": "",
-            "image_name": ""
+            "image_name": "",
+            "app_db_name": "",
+            "app_db_pass": ""
         }
     }
 
