@@ -18,5 +18,11 @@
     },
     "defaults": {
         "verbose": 0
+    },
+    "database": {
+        "host": "",
+        "database": "",
+        "username": "",
+        "password": ""
     }
 }

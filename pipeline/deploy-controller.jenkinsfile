@@ -1,4 +1,4 @@
-// CI pipeline for Jenkins
+// CD pipeline for Jenkins
 // Build and deploy Swarm controller with nginx reverse proxy on dedicated docker node (dev/prod)
 
 // Prepare Swarm host:
@@ -35,9 +35,9 @@ pipeline {
 
     environment {
         // Get secrets from jenkins storage: API key, Swarm hostname and SSH password for user jenkins
-        API_KEY = credentials("swarm-apikey-${DEPLOY}")
-        SWARM_HOSTNAME = credentials("swarm-hostname-${DEPLOY}")
-        SWARM_SSH_CRED = credentials("swarm-sshcred-${DEPLOY}")
+        API_KEY = credentials("swarm-apikey-${DEPLOY}")             // Swarm API Key from Jenkins secrets store
+        SWARM_HOSTNAME = credentials("swarm-hostname-${DEPLOY}")    // Swarm node hostname from Jenkins secrets store
+        SWARM_SSH_CRED = credentials("swarm-sshcred-${DEPLOY}")     // SSH Password for Swarm node from Jenkins secrets store
     }
 
     stages {
@@ -75,7 +75,7 @@ pipeline {
         stage('Generate SSL Keys') {
             steps {
                 // regenerate SSL Certificate and keys on every deploy.
-                sh "cd swarm && openssl req -newkey rsa:2048 -sha256 -nodes -keyout ${PROJECT}-${DEPLOY}.key -x509 -days 3650 -out ${PROJECT}-${DEPLOY}.pem -subj '/C=US/ST=New York/L=Brooklyn/O=${PROJECT} /CN=${SWARM_HOSTNAME}'"
+                sh "cd swarm && openssl req -newkey rsa:2048 -sha256 -nodes -keyout ${API_ID}-${DEPLOY}.key -x509 -days 3650 -out ${API_ID}-${DEPLOY}.pem -subj '/C=US/ST=New York/L=Brooklyn/O=${API_ID} /CN=${SWARM_HOSTNAME}'"
                 sh 'cd swarm && ls -la'
             }
         }
@@ -101,8 +101,8 @@ pipeline {
                                 "proxycmd": "/usr/sbin/nginx -s reload",
                                 "payloads": "config/payloads.json",
                                 "nginxconfig": "/etc/nginx/endpoints.conf",
-                                "certificate": "${PROJECT}-${DEPLOY}.pem",
-                                "sslkey": "${PROJECT}-${DEPLOY}.key"
+                                "certificate": "${API_ID}-${DEPLOY}.pem",
+                                "sslkey": "${API_ID}-${DEPLOY}.key"
                             },
                             "api": {
                                 "key": "${API_KEY}"
@@ -145,8 +145,8 @@ pipeline {
                                 ssl_ciphers                 ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256;
                                 ssl_prefer_server_ciphers   on;
                                 
-                                ssl_certificate     /etc/nginx/${PROJECT}-${DEPLOY}.pem;
-                                ssl_certificate_key /etc/nginx/${PROJECT}-${DEPLOY}.key;
+                                ssl_certificate     /etc/nginx/${API_ID}-${DEPLOY}.pem;
+                                ssl_certificate_key /etc/nginx/${API_ID}-${DEPLOY}.key;
 
                                 # serve local files
                                 location / {
@@ -183,7 +183,7 @@ pipeline {
                     text: """\
                         FROM nginx
 
-                        #install node 14.19.1
+                        # install node 14.19.1
                         RUN apt update
                         RUN apt install wget -y
                         RUN apt install xz-utils -y
@@ -195,7 +195,7 @@ pipeline {
                         RUN cp -r node-v14.19.1-linux-x64/share /usr/
                         RUN export PATH=/usr/node-v14.19.1-linux-x64/bin:\$PATH
 
-                        #run node js server
+                        # run node js server
                         WORKDIR /app
                         COPY ./package.json /app/package.json
                         COPY ./package-lock.json /app/package-lock.json
@@ -206,8 +206,8 @@ pipeline {
                         RUN rm /etc/nginx/nginx.conf /etc/nginx/conf.d/default.conf
                         COPY proxy/conf /etc/nginx
                         COPY proxy/content /usr/share/nginx/html
-                        COPY ${PROJECT}-${DEPLOY}.key /etc/nginx/${PROJECT}-${DEPLOY}.key
-                        COPY ${PROJECT}-${DEPLOY}.pem /etc/nginx/${PROJECT}-${DEPLOY}.pem
+                        COPY ${API_ID}-${DEPLOY}.key /etc/nginx/${API_ID}-${DEPLOY}.key
+                        COPY ${API_ID}-${DEPLOY}.pem /etc/nginx/${API_ID}-${DEPLOY}.pem
                         EXPOSE ${PROXY_PORT}/tcp
                         
                         CMD nginx -g 'pid /var/run/nginx.pid;' & node /app/api-controller.js
@@ -226,7 +226,7 @@ pipeline {
 
                     // define ssh client
                     def remote = [:]
-                    remote.name = "${PROJECT}-${DEPLOY}"
+                    remote.name = "${API_ID}-${DEPLOY}"
                     remote.host = "${SWARM_HOSTNAME}"
                     remote.user = 'jenkins'
                     remote.password = "${SWARM_SSH_CRED}"
@@ -238,15 +238,15 @@ pipeline {
                         sshCommand remote: remote, command: "cd /opt/jenkins && tar -xzvf swarm-deploy.tgz"
                     }
                     stage('Generate Docker:swarm-controller') {
-                        sshCommand remote: remote, command: "cd /opt/jenkins/swarm && docker build -t ${PROJECT}-controller ."
+                        sshCommand remote: remote, command: "cd /opt/jenkins/swarm && docker build -t ${API_ID}-controller ."
                         sshCommand remote: remote, command: "rm /opt/jenkins/swarm -rf"
                         sshCommand remote: remote, command: "rm /opt/jenkins/swarm-deploy.tgz -f"
                     }
                     stage ('Restart Docker:swarm-controller') {
-                        sshCommand remote: remote, command: "docker stop ${PROJECT}-app || true && docker rm ${PROJECT}-app -f || true"
-                        sshCommand remote: remote, command: "docker run -d -p ${PROXY_PORT}:${PROXY_PORT} -e NODE_ENV=${DEPLOY} --restart unless-stopped --name ${PROJECT}-app ${PROJECT}-controller"
+                        sshCommand remote: remote, command: "docker stop ${API_ID}-app || true && docker rm ${API_ID}-app -f || true"
+                        sshCommand remote: remote, command: "docker run -d -p ${PROXY_PORT}:${PROXY_PORT} -e NODE_ENV=${DEPLOY} --restart unless-stopped --name ${API_ID}-app ${API_ID}-controller"
                         sshCommand remote: remote, command: "docker image prune -f && docker image ls && docker ps"
-                        sshCommand remote: remote, command: "docker exec ${PROJECT}-app ls -la"
+                        sshCommand remote: remote, command: "docker exec ${API_ID}-app ls -la"
                     }
                 }
             }

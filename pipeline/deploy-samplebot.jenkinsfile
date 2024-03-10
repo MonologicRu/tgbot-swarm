@@ -8,28 +8,52 @@
 // 1. Create 'swarm-tgtoken-[dev/prod]' secret text with TG token
 
 pipeline {
+
+    parameters {
+            choice(name: 'DEPLOY', choices: ['dev', 'prod'], description: 'Select deployment environment')
+            choice(name: 'DATASTORE', choices: ['none', 'create', 'initialize'], description: 'Make action to database storage')
+    }
+
     agent any
+
     environment {
         // General Configuration 
         VERBOSE = "1"
-        DEPLOY = "dev"
 
         // Application-specific deploy configuration
         TG_TOKEN = credentials("swarm-tgtoken-${DEPLOY}")           // TG bot token from Jenkins secrets store
-        APP_NAME = "sample-tgbot"
-        APP_DESCRIPTION = "Sample_TG_Bot_Webhook_handler"
-        APP_HOME = "sample-bot"
+        APP_NAME = "sample-tgbot"                                   // Application name
+        APP_DESCRIPTION = "Sample_TG_Bot_Webhook_handler"           // Application description
+        APP_HOME = "sample-bot"                                     // Deployment folder work directory
 
         // Swarm host-specific deploy configuration
+        API_ID = "tgswarm"                                          // Swarm controller name prefix for container ops
         API_PORT = "8443"
         API_PATH = "controller"
         API_HOST = "0.0.0.0"
-        API_KEY = credentials("swarm-apikey-${DEPLOY}")
+
+        API_KEY = credentials("swarm-apikey-${DEPLOY}")             // Swarm API Key from Jenkins secrets store
+        DB_PASS = credentials("swarm-datastore-${DEPLOY}")          // Swarm database root password from Jenkins secrets store        
         SWARM_HOSTNAME = credentials("swarm-hostname-${DEPLOY}")    // Swarm node hostname Jenkins secrets store
         SWARM_SSH_CRED = credentials("swarm-sshcred-${DEPLOY}")     // SSH Passwords for Swarm node from Jenkins secrets store
+
     }
     
     stages {
+        stage('Set deploy params') {
+            steps {
+                script {
+                    if (env.DEPLOY != 'dev' && env.DEPLOY != 'prod') {
+                        echo 'Parameter not set, using default'
+                        env.DEPLOY = 'dev'
+                    }
+                    if (env.DATASTORE != 'create' && env.DATASTORE != 'initialize' && env.DATASTORE != 'none') {
+                        echo 'Parameter not set, no action needed'
+                        env.DATASTORE = 'none'
+                    }
+                }
+            }
+        }
         stage('Get Swarm Node params') {
             steps {
                 script {
@@ -39,6 +63,9 @@ pipeline {
                     def responseObject = readJSON text: response
                     env.APP_PATH = "$responseObject.path"
                     env.APP_PORT = "$responseObject.port"
+                    env.APP_DB_NAME = "$responseObject.app_db_name"
+                    env.APP_DB_USER = "$responseObject.app_db_user"
+                    env.APP_DB_PASS = "$responseObject.app_db_pass"
                     env.IMAGE_NAME = "$responseObject.docker_image_name"
                     env.CONTAINER_NAME = "$responseObject.docker_container_name"
                     env.SSL_CERT = "$responseObject.ssl_certificate"
@@ -86,6 +113,12 @@ pipeline {
                                 "url": "https://${SWARM_HOSTNAME}:${API_PORT}/${APP_PATH}",
                                 "key": "${APP_NAME}-${DEPLOY}.key",
                                 "cert": "${APP_NAME}-${DEPLOY}.pem"
+                            },
+                            "database": {
+                                "host": "${API_HOST}",
+                                "database": "${APP_DB_NAME}",
+                                "username": "${APP_DB_USER}",
+                                "password": "${APP_DB_PASS}"
                             }
                         }
                     """.stripIndent()
@@ -141,6 +174,26 @@ pipeline {
                         sshCommand remote: remote, command: "docker run -d -p ${APP_PORT}:${APP_PORT} -e NODE_ENV=${DEPLOY} --restart unless-stopped --name ${CONTAINER_NAME} ${IMAGE_NAME}"
                         sshCommand remote: remote, command: "docker image prune -f && docker image ls && docker ps"
                         sshCommand remote: remote, command: "docker exec ${CONTAINER_NAME} ls -la"
+                    }
+                    stage ("Create or update Datastore") {
+                        if (env.DATASTORE == 'create') {
+                            // Datastore create action: create database and user, if user exist update password. 
+                            // Preserve existing data.
+                            sshCommand remote: remote, command: "docker exec ${API_ID}-db mysql -p${DB_PASS} -e 'CREATE DATABASE IF NOT EXISTS ${APP_DB_NAME} CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci;'"
+                            sshCommand remote: remote, command: "docker exec ${API_ID}-db mysql -p${DB_PASS} -e 'CREATE USER IF NOT EXISTS ${APP_DB_USER} IDENTIFIED BY \"${APP_DB_PASS}\";'"
+                            sshCommand remote: remote, command: "docker exec ${API_ID}-db mysql -p${DB_PASS} -e 'ALTER USER IF EXISTS ${APP_DB_USER} IDENTIFIED BY \"${APP_DB_PASS}\";'"
+                            sshCommand remote: remote, command: "docker exec ${API_ID}-db mysql -p${DB_PASS} -e 'GRANT ALL PRIVILEGES ON ${APP_DB_NAME}.* TO ${APP_DB_USER} WITH GRANT OPTION;'"
+                        } else if (env.DATASTORE == 'initialize') {
+                            // Datastore initialize action: re-create user and database. 
+                            // Drop all existing data.
+                            sshCommand remote: remote, command: "docker exec ${API_ID}-db mysql -p${DB_PASS} -e 'DROP DATABASE IF EXISTS ${APP_DB_NAME};'"
+                            sshCommand remote: remote, command: "docker exec ${API_ID}-db mysql -p${DB_PASS} -e 'DROP USER IF EXISTS ${APP_DB_USER};'"
+                            sshCommand remote: remote, command: "docker exec ${API_ID}-db mysql -p${DB_PASS} -e 'CREATE DATABASE IF NOT EXISTS ${APP_DB_NAME} CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci;'"
+                            sshCommand remote: remote, command: "docker exec ${API_ID}-db mysql -p${DB_PASS} -e 'CREATE USER IF NOT EXISTS ${APP_DB_USER} IDENTIFIED BY \"${APP_DB_PASS}\";'"
+                            sshCommand remote: remote, command: "docker exec ${API_ID}-db mysql -p${DB_PASS} -e 'GRANT ALL PRIVILEGES ON ${APP_DB_NAME}.* TO ${APP_DB_USER} WITH GRANT OPTION;'"
+                        } else {
+                            println("No DB action taken.")
+                        }
                     }
                 }
             }
