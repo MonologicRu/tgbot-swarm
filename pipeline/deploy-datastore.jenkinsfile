@@ -86,7 +86,7 @@ pipeline {
                     }
                     stage ("Restart Docker container") {
                         sshCommand remote: remote, command: "docker stop ${API_ID}-db || true && docker rm ${API_ID}-db -f || true"
-                        sshCommand remote: remote, command: "docker run -d -p ${DB_PORT}:${DB_PORT} -e NODE_ENV=${DEPLOY} --restart unless-stopped --name ${API_ID}-db ${API_ID}-datastore -v mysql:/var/lib/mysql"
+                        sshCommand remote: remote, command: "docker run -d -p ${DB_PORT}:${DB_PORT} -e NODE_ENV=${DEPLOY} --restart unless-stopped --name ${API_ID}-db ${API_ID}-datastore" // -v mysql:/var/lib/mysql
                         sshCommand remote: remote, command: "docker image prune -f && docker image ls && docker ps"
                         sshCommand remote: remote, command: "docker exec ${API_ID}-db ls -la"
                     }
