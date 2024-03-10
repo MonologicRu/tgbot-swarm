@@ -15,7 +15,7 @@ pipeline {
 
     environment {
         // Get secrets from jenkins storage: DB root password, Swarm hostname and SSH password for user jenkins
-        DB_PASS = credentials("swarm-datastore-${DEPLOY}")          // Swarm API Key from Jenkins secrets store
+        DB_PASS = credentials("swarm-datastore-${DEPLOY}")          // Swarm database root password from Jenkins secrets store
         SWARM_HOSTNAME = credentials("swarm-hostname-${DEPLOY}")    // Swarm node hostname from Jenkins secrets store
         SWARM_SSH_CRED = credentials("swarm-sshcred-${DEPLOY}")     // SSH Passwords for Swarm node from Jenkins secrets store
     }
