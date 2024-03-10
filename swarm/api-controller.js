@@ -130,7 +130,7 @@ app.get("/update", async function (req, res) {
 		appUrl = "https://" + proxy.fqdn + ":" + proxy.port + "/" + appPath;
 		nodePort = floatPort + 1;
 		dbID = requestedName.replace(/[^a-zA-Z]/gm,"");
-		dbPass = makeHashString( api.key, requestedName );
+		dbPass = makeHashString( SSLKey, requestedName );
 		payloadNodes[ requestedName ] = {
 			"description": appDescription,
 			"docker_image_name": requestedName + "-image",
