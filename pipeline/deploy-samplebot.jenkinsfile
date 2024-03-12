@@ -169,12 +169,6 @@ pipeline {
                         sshCommand remote: remote, command: "rm /opt/jenkins/${APP_HOME} -rf"
                         sshCommand remote: remote, command: "rm /opt/jenkins/deploy-package.tgz -f"
                     }
-                    stage ("Restart Docker container") {
-                        sshCommand remote: remote, command: "docker stop ${CONTAINER_NAME} || true && docker rm ${CONTAINER_NAME} -f || true"
-                        sshCommand remote: remote, command: "docker run -d -p ${APP_PORT}:${APP_PORT} -e NODE_ENV=${DEPLOY} --restart unless-stopped --name ${CONTAINER_NAME} ${IMAGE_NAME}"
-                        sshCommand remote: remote, command: "docker image prune -f && docker image ls && docker ps"
-                        sshCommand remote: remote, command: "docker exec ${CONTAINER_NAME} ls -la"
-                    }
                     stage ("Create or update Datastore") {
                         if (env.DATASTORE == 'create') {
                             // Datastore create action: create database and user, if user exist update password. 
@@ -194,6 +188,12 @@ pipeline {
                         } else {
                             println("No DB action taken.")
                         }
+                    }
+                    stage ("Restart Docker container") {
+                        sshCommand remote: remote, command: "docker stop ${CONTAINER_NAME} || true && docker rm ${CONTAINER_NAME} -f || true"
+                        sshCommand remote: remote, command: "docker run -d -p ${APP_PORT}:${APP_PORT} -e NODE_ENV=${DEPLOY} --restart unless-stopped --name ${CONTAINER_NAME} ${IMAGE_NAME}"
+                        sshCommand remote: remote, command: "docker image prune -f && docker image ls && docker ps"
+                        sshCommand remote: remote, command: "docker exec ${CONTAINER_NAME} ls -la"
                     }
                 }
             }
