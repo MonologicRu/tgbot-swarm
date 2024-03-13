@@ -51,6 +51,23 @@ const SSLKey = readStaticFile( sslKeyFilename );
 // write on-startup nginx configuration
 writeStaticFile ( nginxConfigFilename, generateNginxConfig ( payloadNodes ) );
 
+
+app.get("/get", async function (req, res) {
+	if ( req.query["api-key"] != api.key ) {
+		res.send({
+			'status' : 'API key mismatch. '
+		});
+		return (1);
+	};
+	// create empty apiRespoonse and assign params to it
+	let apiResponse = {};
+	let requestedName = req.query["application-id"];
+	Object.assign( apiResponse, payloadNodes[ requestedName ] )
+	res.send( apiResponse );
+	return (0);
+});
+
+
 app.get("/update", async function (req, res) {
 	if ( req.query["api-key"] != api.key ) {
 		res.send({
@@ -130,7 +147,8 @@ app.get("/update", async function (req, res) {
 		appUrl = "https://" + proxy.fqdn + ":" + proxy.port + "/" + appPath;
 		nodePort = floatPort + 1;
 		dbID = requestedName.replace(/[^a-zA-Z]/gm,"");
-		dbPass = makeHashString( SSLKey, requestedName );
+		dbPass = makeHashString( SSLKey, requestedName + "_db");
+		apiToken = makeHashString( SSLKey, requestedName + "_api");
 		payloadNodes[ requestedName ] = {
 			"description": appDescription,
 			"docker_image_name": requestedName + "-image",
@@ -138,6 +156,7 @@ app.get("/update", async function (req, res) {
 			"app_db_name": dbID + "_store",
 			"app_db_user": dbID + "_user",
 			"app_db_pass": dbPass,
+			"app_api_token": apiToken,
 			"path": appPath,
 			"port": nodePort,
 			"url": appUrl,
