@@ -62,7 +62,11 @@ app.get("/update", async function (req, res) {
 	let updateTime = getDatetime().toString();
 	let nodeNames = Object.keys( payloadNodes );
 	let floatPort;
-	if (portRange[0]) { floatPort = portRange[0] }
+	if ( portRange[0] ) { 
+		floatPort = portRange[0] 
+	} else {
+		floatPort = 8088;
+	}
 	let appPath; let appUrl; let appName; let appDescription; let nodePort;
 
 	// iterate trough existing nodes to make sure that ports are within range and 
